@@ -1,0 +1,40 @@
+version: "3.8"
+
+services:
+  vector:
+    container_name: supabase-vector
+    image: supabase/vector:latest
+    restart: unless-stopped
+    volumes:
+      - ./volumes/logs/vector.yml:/etc/vector/vector.yml:ro,z
+      - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro,z
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:9001/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    environment:
+      VECTOR_CONFIG: /etc/vector/vector.yml
+      VECTOR_WATCH_CONFIG: "true"
+      MALLOC_CONF: "background_thread:true,metadata_thp:auto,dirty_decay_ms:30000,muzzy_decay_ms:30000"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["--config", "/etc/vector/vector.yml", "--watch-config"]
+    security_opt:
+      - "label=disable"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    networks:
+      - default

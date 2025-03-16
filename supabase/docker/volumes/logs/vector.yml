@@ -3,22 +3,14 @@ data_dir: "/var/lib/vector"
 api:
   enabled: true
   address: "0.0.0.0:9001"
-  playground: false
 
 sources:
-  internal_logs:
-    type: "internal_logs"
-
-  docker:
-    type: "docker_logs"
-    docker_host: "unix:///var/run/docker.sock"
-    include_containers: []
-    exclude_containers: []
+  internal_metrics:
+    type: "internal_metrics"
 
 sinks:
-  stdout:
+  console:
     type: "console"
-    inputs: ["internal_logs", "docker"]
+    inputs: ["internal_metrics"]
     encoding:
       codec: "json"
-    target: "stdout"
