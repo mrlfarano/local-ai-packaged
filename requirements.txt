@@ -1,2 +1,4 @@
+python-dotenv==1.0.1
+requests==2.31.0
 PyJWT==2.8.0  # For JWT token generation
 cryptography>=42.0.5  # Required by PyJWT for secure operations 

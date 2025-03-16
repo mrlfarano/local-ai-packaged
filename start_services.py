@@ -20,6 +20,7 @@ import secrets
 import string
 import jwt
 from datetime import datetime, timedelta
+from cloudflare_setup import main as setup_cloudflare
 
 def generate_random_string(length, exclude_chars='@<>&\'"'):
     """Generate a cryptographically secure random string of specified length."""
@@ -164,19 +165,50 @@ def setup_cloudflared():
     print("\nWould you like to use Cloudflare Tunnels for secure access? (y/N)")
     print("This will allow secure access to your services without managing DNS records.")
     if input().lower() == 'y':
-        print("\nPlease enter your Cloudflare Tunnel token (from Zero Trust dashboard):")
-        token = input().strip()
-        if token:
+        print("\nPlease provide the following Cloudflare information:")
+        print("\n1. Cloudflare Tunnel token (from Zero Trust dashboard):")
+        tunnel_token = input().strip()
+        
+        print("\n2. Cloudflare API token (with Tunnel:Edit and DNS:Edit permissions):")
+        api_token = input().strip()
+        
+        print("\n3. Cloudflare Account ID (found in the dashboard URL):")
+        account_id = input().strip()
+        
+        print("\n4. Your domain name (e.g., example.com):")
+        domain = input().strip()
+        
+        if all([tunnel_token, api_token, account_id, domain]):
             with open(".env", "r") as f:
                 content = f.read()
-            if "CLOUDFLARED_TUNNEL_TOKEN=" in content:
-                content = content.replace("CLOUDFLARED_TUNNEL_TOKEN=", f"CLOUDFLARED_TUNNEL_TOKEN={token}")
-            else:
-                content += f"\nCLOUDFLARED_TUNNEL_TOKEN={token}\n"
+            
+            # Update all Cloudflare-related variables
+            replacements = {
+                "CLOUDFLARED_TUNNEL_TOKEN=": f"CLOUDFLARED_TUNNEL_TOKEN={tunnel_token}",
+                "CLOUDFLARE_API_TOKEN=": f"CLOUDFLARE_API_TOKEN={api_token}",
+                "CLOUDFLARE_ACCOUNT_ID=": f"CLOUDFLARE_ACCOUNT_ID={account_id}",
+                "CLOUDFLARE_DOMAIN=": f"CLOUDFLARE_DOMAIN={domain}"
+            }
+            
+            for key, value in replacements.items():
+                if key in content:
+                    content = content.replace(key + content.split(key)[1].split("\n")[0], value)
+                else:
+                    content += f"\n{value}"
+            
             with open(".env", "w") as f:
                 f.write(content)
-            print("Cloudflare Tunnel token configured successfully.")
+            
+            print("\nCloudflare configuration completed successfully.")
+            print("The following hostnames will be configured:")
+            print(f"- n8n.{domain}")
+            print(f"- webui.{domain}")
+            print(f"- flowise.{domain}")
+            print(f"- ollama.{domain}")
+            print(f"- searxng.{domain}")
             return True
+        else:
+            print("\nError: All Cloudflare information is required. Skipping Cloudflare setup.")
     return False
 
 def stop_existing_containers():
@@ -216,6 +248,10 @@ def start_services(profile=None, use_cloudflared=False):
     cmd.extend(["-f", "docker-compose.yml", "up", "-d"])
     run_command(cmd)
 
+    # After starting services, set up Cloudflare tunnel hostnames
+    print("\nSetting up Cloudflare tunnel hostnames...")
+    setup_cloudflare()
+
 def check_dependencies():
     """Check if required dependencies are installed."""
     try:
@@ -254,13 +290,28 @@ def main():
     start_services(args.profile, use_cloudflared)
     
     print("\n🎉 Setup complete! Your services are now starting.")
-    print("\nAccess your services at:")
-    print("- n8n: http://localhost:5678")
-    print("- Open WebUI: http://localhost:3000")
-    print("- Flowise: http://localhost:3001")
-    print("- SearXNG: http://localhost:8080")
+    
     if use_cloudflared:
-        print("\nNote: Configure your Cloudflare Tunnel public hostnames in the Zero Trust dashboard.")
+        # Get domain from .env file
+        with open(".env", "r") as f:
+            content = f.read()
+            domain = next((line.split("=")[1].strip() for line in content.split("\n") 
+                         if line.startswith("CLOUDFLARE_DOMAIN=")), None)
+        if domain:
+            print("\nYour services will be available at:")
+            print(f"- n8n: https://n8n.{domain}")
+            print(f"- Open WebUI: https://webui.{domain}")
+            print(f"- Flowise: https://flowise.{domain}")
+            print(f"- Ollama: https://ollama.{domain}")
+            print(f"- SearXNG: https://searxng.{domain}")
+            print("\nNote: It may take a few minutes for the Cloudflare Tunnel to become active.")
+            print("You can monitor the tunnel status in the Cloudflare Zero Trust dashboard.")
+    else:
+        print("\nAccess your services at:")
+        print("- n8n: http://localhost:5678")
+        print("- Open WebUI: http://localhost:3000")
+        print("- Flowise: http://localhost:3001")
+        print("- SearXNG: http://localhost:8080")
 
 if __name__ == "__main__":
     main()
