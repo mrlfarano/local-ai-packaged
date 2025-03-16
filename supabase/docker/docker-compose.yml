@@ -3,7 +3,7 @@ version: "3.8"
 services:
   vector:
     container_name: supabase-vector
-    image: supabase/vector:latest
+    image: timberio/vector:latest-debian
     restart: unless-stopped
     volumes:
       - ./volumes/logs/vector.yml:/etc/vector/vector.yml:ro,z
