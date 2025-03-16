@@ -207,6 +207,41 @@ interact with the local filesystem.
 - [Local File Trigger](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.localfiletrigger/)
 - [Execute Command](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.executecommand/)
 
+## Recent Improvements
+
+This fork includes several enhancements to the original project:
+
+- Simplified setup process with automatic secret generation
+- Enhanced security features with environment variable validation
+- Improved error handling and troubleshooting guidance
+- Added support for Cloudflare Tunnels
+- Streamlined container management
+- Automatic backup and rotation of secrets
+
+## Environment Variables
+
+The following environment variables can be customized in your `.env` file:
+
+- `POSTGRES_PASSWORD` - Database password (auto-generated if not set)
+- `JWT_SECRET` - JWT authentication secret (auto-generated if not set)
+- `ANON_KEY` - Supabase anonymous key (auto-generated if not set)
+- `SERVICE_ROLE_KEY` - Supabase service role key (auto-generated if not set)
+- `CLOUDFLARE_TUNNEL_TOKEN` - Optional: Your Cloudflare Tunnel token for secure remote access
+
+For a complete list of environment variables, see the `.env.example` file.
+
+## Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please make sure to update tests and documentation as appropriate.
+
 ## 📜 License
 
 This project (originally created by the n8n team, link at the top of the README) is licensed under the Apache License 2.0 - see the
