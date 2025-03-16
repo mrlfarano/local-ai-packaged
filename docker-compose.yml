@@ -6,7 +6,8 @@ volumes:
   flowise:
   caddy-data:
   caddy-config:
-  valkey-data:  
+  valkey-data:
+  cloudflared-config:
 
 x-n8n: &service-n8n
   image: n8nio/n8n:latest
@@ -50,13 +51,13 @@ services:
     restart: unless-stopped
     container_name: flowise
     environment:
-        - PORT=3001
+      - PORT=3001
     ports:
-        - 3001:3001
+      - 3001:3001
     extra_hosts:
-      - "host.docker.internal:host-gateway"        
+      - "host.docker.internal:host-gateway"
     volumes:
-        - ~/.flowise:/root/.flowise
+      - ~/.flowise:/root/.flowise
     entrypoint: /bin/sh -c "sleep 3; flowise start"
 
   open-webui:
@@ -78,7 +79,7 @@ services:
       - "-c"
       - "n8n import:credentials --separate --input=/backup/credentials && n8n import:workflow --separate --input=/backup/workflows"
     volumes:
-      - ./n8n/backup:/backup  
+      - ./n8n/backup:/backup
 
   n8n:
     <<: *service-n8n
@@ -171,7 +172,23 @@ services:
       driver: "json-file"
       options:
         max-size: "1m"
-        max-file: "1"      
+        max-file: "1"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN:-}
+    volumes:
+      - cloudflared-config:/etc/cloudflared
+    profiles: ["cloudflared"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
 
   ollama-cpu:
     profiles: ["cpu"]
@@ -213,4 +230,4 @@ services:
     <<: *init-ollama
     image: ollama/ollama:rocm
     depends_on:
-     - ollama-gpu-amd
+      - ollama-gpu-amd

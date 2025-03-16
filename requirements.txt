@@ -1,0 +1,2 @@
+PyJWT==2.8.0  # For JWT token generation
+cryptography>=42.0.5  # Required by PyJWT for secure operations 
