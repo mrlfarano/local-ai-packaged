@@ -10,6 +10,7 @@ volumes:
   caddy-config:
   valkey-data:
   cloudflared-config:
+  ollama-data:
 
 x-n8n: &service-n8n
   image: n8nio/n8n:latest
@@ -50,41 +51,41 @@ x-init-ollama: &init-ollama
 services:
   flowise:
     image: flowiseai/flowise
-    restart: unless-stopped
     container_name: flowise
-    environment:
-      - PORT=3001
+    restart: always
     ports:
-      - 3001:3001
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "3001:3001"
+    environment:
+      - PORT=${FLOWISE_PORT:-3001}
+      - FLOWISE_USERNAME=${FLOWISE_USERNAME:-admin}
+      - FLOWISE_PASSWORD=${FLOWISE_PASSWORD:-admin123}
     volumes:
-      - ~/.flowise:/root/.flowise
-    entrypoint: /bin/sh -c "sleep 3; flowise start"
+      - ./flowise-data:/root/.flowise
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
-    restart: unless-stopped
     container_name: open-webui
+    restart: always
     ports:
       - "3000:8080"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    environment:
+      - OLLAMA_API_BASE_URL=http://ollama:11434/api
     volumes:
       - open-webui:/app/backend/data
+    depends_on:
+      - ollama-cpu
 
   n8n-import:
-    <<: *service-n8n
+    image: n8nio/n8n:latest
     container_name: n8n-import
-    entrypoint: /bin/sh
-    command:
-      - "-c"
-      - "sleep 15 && n8n import:credentials --separate --input=/backup/credentials && n8n import:workflow --separate --input=/backup/workflows"
+    entrypoint: /bin/sh -c
+    command: >
+      "sleep 15 &&
+      n8n import:workflow --input=/data/Local_RAG_AI_Agent_n8n_Workflow.json"
     volumes:
-      - ./n8n/backup:/backup
+      - ./:/data
     depends_on:
-      n8n:
-        condition: service_started
+      - n8n
 
   n8n:
     image: n8nio/n8n:latest
@@ -103,7 +104,7 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-admin123}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-secret-key-here}
       - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=db
+      - DB_POSTGRESDB_HOST=supabase-db
       - DB_POSTGRESDB_PORT=${POSTGRES_PORT:-5432}
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-postgres}
       - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
@@ -111,7 +112,6 @@ services:
     volumes:
       - ./n8n-data:/home/node/.n8n
     depends_on:
-      - db
       - redis
 
   qdrant:
@@ -151,102 +151,60 @@ services:
         max-file: "1"
 
   redis:
+    image: valkey/valkey:8-alpine
     container_name: redis
-    image: docker.io/valkey/valkey:8-alpine
-    command: valkey-server --save 30 1 --loglevel warning
-    restart: unless-stopped
+    restart: always
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-your-redis-password}
     volumes:
       - valkey-data:/data
-    cap_drop:
-      - ALL
-    cap_add:
-      - SETGID
-      - SETUID
-      - DAC_OVERRIDE
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "1"
 
   searxng:
+    image: searxng/searxng:latest
     container_name: searxng
-    image: docker.io/searxng/searxng:latest
-    restart: unless-stopped
+    restart: always
     ports:
-      - 8080:8080
-    volumes:
-      - ./searxng:/etc/searxng:rw
+      - "8080:8080"
     environment:
-      - SEARXNG_BASE_URL=https://${SEARXNG_HOSTNAME:-localhost}/
-      - UWSGI_WORKERS=${SEARXNG_UWSGI_WORKERS:-4}
-      - UWSGI_THREADS=${SEARXNG_UWSGI_THREADS:-4}
+      - SEARXNG_SECRET=${SEARXNG_SECRET:-your-searxng-secret-key}
+    volumes:
+      - ./searxng-data:/etc/searxng
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
       - SETGID
       - SETUID
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "1"
+      - DAC_OVERRIDE
 
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
-    restart: unless-stopped
-    command: tunnel run
+    restart: always
+    command: tunnel --no-autoupdate run
     environment:
-      - TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN:-}
-    volumes:
-      - cloudflared-config:/etc/cloudflared
+      - TUNNEL_TOKEN=${CLOUDFLARED_TUNNEL_TOKEN}
     profiles: ["cloudflared"]
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "1m"
-        max-file: "1"
 
   ollama-cpu:
     profiles: ["cpu"]
-    <<: *service-ollama
-
-  ollama-gpu:
-    profiles: ["gpu-nvidia"]
-    <<: *service-ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  ollama-gpu-amd:
-    profiles: ["gpu-amd"]
-    <<: *service-ollama
-    image: ollama/ollama:rocm
-    devices:
-      - "/dev/kfd"
-      - "/dev/dri"
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
 
   ollama-pull-llama-cpu:
     profiles: ["cpu"]
-    <<: *init-ollama
+    image: ollama/ollama:latest
+    container_name: ollama-pull-llama
+    volumes:
+      - ollama-data:/root/.ollama
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull qwen2.5:7b-instruct-q4_K_M; OLLAMA_HOST=ollama:11434 ollama pull nomic-embed-text"
     depends_on:
       - ollama-cpu
-
-  ollama-pull-llama-gpu:
-    profiles: ["gpu-nvidia"]
-    <<: *init-ollama
-    depends_on:
-      - ollama-gpu
-
-  ollama-pull-llama-gpu-amd:
-    profiles: [gpu-amd]
-    <<: *init-ollama
-    image: ollama/ollama:rocm
-    depends_on:
-      - ollama-gpu-amd

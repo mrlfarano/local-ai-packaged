@@ -218,16 +218,17 @@ def start_services(profile=None, use_cloudflared=False):
     
     # Start Supabase services first
     try:
+        print("Starting Supabase database...")
         run_command([
             "docker", "compose", "-p", "localai",
             "-f", "supabase/docker/docker-compose.yml",
-            "up", "-d", "db", "imgproxy"  # Start only db and imgproxy first
+            "up", "-d", "db"  # Start only db first
         ])
         
         print("Waiting for database to initialize...")
-        time.sleep(15)  # Give the database more time to initialize
+        time.sleep(15)  # Give the database time to initialize
         
-        # Start remaining Supabase services
+        print("Starting remaining Supabase services...")
         run_command([
             "docker", "compose", "-p", "localai",
             "-f", "supabase/docker/docker-compose.yml",
@@ -242,6 +243,7 @@ def start_services(profile=None, use_cloudflared=False):
     
     # Start local AI services
     try:
+        print("Starting local AI services...")
         cmd = ["docker", "compose", "-p", "localai"]
         if profile and profile != "none":
             cmd.extend(["--profile", profile])
@@ -249,6 +251,13 @@ def start_services(profile=None, use_cloudflared=False):
             cmd.extend(["--profile", "cloudflared"])
         cmd.extend(["-f", "docker-compose.yml", "up", "-d"])
         run_command(cmd)
+        
+        print("Waiting for services to initialize...")
+        time.sleep(10)
+        
+        # Check service health
+        run_command(["docker", "ps", "--format", "{{.Names}}\t{{.Status}}"])
+        
     except subprocess.CalledProcessError as e:
         print(f"Error starting local AI services: {e}")
         sys.exit(1)
