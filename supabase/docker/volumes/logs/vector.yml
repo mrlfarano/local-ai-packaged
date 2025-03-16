@@ -6,13 +6,19 @@ api:
   playground: false
 
 sources:
-  docker_logs:
+  internal_logs:
+    type: "internal_logs"
+
+  docker:
     type: "docker_logs"
     docker_host: "unix:///var/run/docker.sock"
+    include_containers: []
+    exclude_containers: []
 
 sinks:
-  console:
+  stdout:
     type: "console"
-    inputs: ["docker_logs"]
+    inputs: ["internal_logs", "docker"]
     encoding:
       codec: "json"
+    target: "stdout"
