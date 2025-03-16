@@ -1,3 +1,5 @@
+version: "3.8"
+
 volumes:
   n8n_storage:
   ollama_storage:
@@ -85,15 +87,32 @@ services:
         condition: service_started
 
   n8n:
-    <<: *service-n8n
+    image: n8nio/n8n:latest
     container_name: n8n
-    restart: unless-stopped
+    restart: always
     ports:
-      - 5678:5678
+      - "5678:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-http://localhost:5678}
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_SSL_CERT=${N8N_SSL_CERT:-}
+      - N8N_SSL_KEY=${N8N_SSL_KEY:-}
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-admin123}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-secret-key-here}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${POSTGRES_HOST:-postgres}
+      - DB_POSTGRESDB_PORT=${POSTGRES_PORT:-5432}
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-postgres}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-your-postgres-password}
     volumes:
-      - n8n_storage:/home/node/.n8n
-      - ./n8n/backup:/backup
-      - ./shared:/data/shared
+      - ./n8n-data:/home/node/.n8n
+    depends_on:
+      - postgres
+      - redis
 
   qdrant:
     image: qdrant/qdrant
