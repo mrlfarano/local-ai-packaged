@@ -75,10 +75,7 @@ def cleanup():
     files_to_remove = [
         ".env",
         "cloudflared.exe",
-        "cloudflared",
-        ".env.example",
-        "docker-compose.yml",
-        "Caddyfile"
+        "cloudflared"
     ]
     
     for file_name in files_to_remove:
