@@ -107,6 +107,8 @@ The setup script implements several security best practices:
 - Ensures all secrets meet complexity requirements (letters, numbers, symbols)
 - Avoids problematic characters that could cause service issues
 - Supports secure access through Cloudflare Tunnels
+- Implements automatic secret rotation and backup
+- Validates all environment variables before service startup
 
 ## Upgrading
 
