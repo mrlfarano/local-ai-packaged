@@ -103,7 +103,7 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-admin123}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-secret-key-here}
       - DB_TYPE=postgresdb
-      - DB_POSTGRESDB_HOST=supabase-db
+      - DB_POSTGRESDB_HOST=db
       - DB_POSTGRESDB_PORT=${POSTGRES_PORT:-5432}
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-postgres}
       - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
@@ -111,7 +111,7 @@ services:
     volumes:
       - ./n8n-data:/home/node/.n8n
     depends_on:
-      - supabase-db
+      - db
       - redis
 
   qdrant:

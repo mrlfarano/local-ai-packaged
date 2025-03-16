@@ -150,7 +150,8 @@ def setup_cloudflared():
     """Configure Cloudflare Tunnel if requested."""
     print("\nWould you like to use Cloudflare Tunnels for secure access? (y/N)")
     print("This will allow secure access to your services without managing DNS records.")
-    if input().lower() == 'y':
+    response = input().strip().lower()
+    if response == 'y' or response == 'yes':
         print("\nPlease provide the following Cloudflare information:")
         print("\n1. Cloudflare Tunnel token (from Zero Trust dashboard):")
         tunnel_token = input().strip()
@@ -215,28 +216,47 @@ def start_services(profile=None, use_cloudflared=False):
     """Start all services with the specified profile."""
     print("Starting services...")
     
-    # Start Supabase
-    run_command([
-        "docker", "compose", "-p", "localai",
-        "-f", "supabase/docker/docker-compose.yml",
-        "up", "-d"
-    ])
-    
-    print("Waiting for Supabase to initialize...")
-    time.sleep(10)
+    # Start Supabase services first
+    try:
+        run_command([
+            "docker", "compose", "-p", "localai",
+            "-f", "supabase/docker/docker-compose.yml",
+            "up", "-d", "db", "imgproxy"  # Start only db and imgproxy first
+        ])
+        
+        print("Waiting for database to initialize...")
+        time.sleep(15)  # Give the database more time to initialize
+        
+        # Start remaining Supabase services
+        run_command([
+            "docker", "compose", "-p", "localai",
+            "-f", "supabase/docker/docker-compose.yml",
+            "up", "-d"  # Now start all remaining services
+        ])
+        
+        print("Waiting for Supabase services to stabilize...")
+        time.sleep(10)
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: Error starting Supabase services: {e}")
+        print("Continuing with other services...")
     
     # Start local AI services
-    cmd = ["docker", "compose", "-p", "localai"]
-    if profile and profile != "none":
-        cmd.extend(["--profile", profile])
-    if use_cloudflared:
-        cmd.extend(["--profile", "cloudflared"])
-    cmd.extend(["-f", "docker-compose.yml", "up", "-d"])
-    run_command(cmd)
+    try:
+        cmd = ["docker", "compose", "-p", "localai"]
+        if profile and profile != "none":
+            cmd.extend(["--profile", profile])
+        if use_cloudflared:
+            cmd.extend(["--profile", "cloudflared"])
+        cmd.extend(["-f", "docker-compose.yml", "up", "-d"])
+        run_command(cmd)
+    except subprocess.CalledProcessError as e:
+        print(f"Error starting local AI services: {e}")
+        sys.exit(1)
 
     # After starting services, set up Cloudflare tunnel hostnames
-    print("\nSetting up Cloudflare tunnel hostnames...")
-    setup_cloudflare()
+    if use_cloudflared:
+        print("\nSetting up Cloudflare tunnel hostnames...")
+        setup_cloudflare()
 
 def check_dependencies():
     """Check if required dependencies are installed."""
