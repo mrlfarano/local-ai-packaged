@@ -24,21 +24,28 @@ def cleanup():
     # Get the current directory
     current_dir = Path.cwd()
     
-    # 1. Stop and remove all Docker containers
-    print("\n1. Stopping and removing Docker containers...")
-    run_command("docker compose -f docker-compose.yml down -v")
-    run_command("docker compose -f supabase/docker/docker-compose.yml down -v")
+    # 1. Force stop all containers first
+    print("\n1. Force stopping all containers...")
+    run_command("docker ps -q | xargs -r docker stop -t 0")
+    run_command("docker ps -a -q | xargs -r docker rm -f")
     
-    # 2. Remove all Docker volumes
-    print("\n2. Removing Docker volumes...")
+    # 2. Stop and remove all Docker containers
+    print("\n2. Removing Docker compose services...")
+    run_command("docker compose -f docker-compose.yml down -v --remove-orphans")
+    if os.path.exists("supabase/docker/docker-compose.yml"):
+        run_command("docker compose -f supabase/docker/docker-compose.yml down -v --remove-orphans")
+    
+    # 3. Remove all Docker volumes
+    print("\n3. Removing Docker volumes...")
+    run_command("docker volume ls -q | xargs -r docker volume rm -f")
     run_command("docker volume prune -f")
     
-    # 3. Remove all Docker networks
-    print("\n3. Removing Docker networks...")
+    # 4. Remove all Docker networks
+    print("\n4. Removing Docker networks...")
     run_command("docker network prune -f")
     
-    # 4. Remove specific directories
-    print("\n4. Removing project directories...")
+    # 5. Remove specific directories
+    print("\n5. Removing project directories...")
     dirs_to_remove = [
         "supabase",
         "n8n-data",
@@ -46,7 +53,10 @@ def cleanup():
         "flowise-data",
         "webui-data",
         "searxng-data",
-        "__pycache__"
+        "__pycache__",
+        "shared",
+        "n8n",
+        "n8n-tool-workflows"
     ]
     
     for dir_name in dirs_to_remove:
@@ -57,13 +67,18 @@ def cleanup():
                 shutil.rmtree(dir_path)
             except Exception as e:
                 print(f"Error removing {dir_path}: {e}")
+                # Try with force remove if normal remove fails
+                run_command(f"rm -rf {dir_path}")
     
-    # 5. Remove specific files
-    print("\n5. Removing configuration files...")
+    # 6. Remove specific files
+    print("\n6. Removing configuration files...")
     files_to_remove = [
         ".env",
         "cloudflared.exe",
-        "cloudflared"
+        "cloudflared",
+        ".env.example",
+        "docker-compose.yml",
+        "Caddyfile"
     ]
     
     for file_name in files_to_remove:
@@ -74,13 +89,26 @@ def cleanup():
                 os.remove(file_path)
             except Exception as e:
                 print(f"Error removing {file_path}: {e}")
+                # Try with force remove if normal remove fails
+                run_command(f"rm -f {file_path}")
     
-    print("\n🧹 Cleanup complete! You can now start fresh with 'python start_services.py'")
+    # 7. Final cleanup
+    print("\n7. Final cleanup...")
+    run_command("docker system prune -f")
+    
+    print("\n🧹 Cleanup complete! You can now start fresh with:")
+    print("1. git pull  # to get the latest files")
+    print("2. python start_services.py --profile cpu")
 
 if __name__ == "__main__":
     # Ask for confirmation
     print("⚠️  WARNING: This will destroy all local data, containers, and configurations.")
-    print("Are you sure you want to proceed? (y/N)")
+    print("This includes:")
+    print("- All running containers")
+    print("- All Docker volumes and networks")
+    print("- All local configuration files")
+    print("- All service data directories")
+    print("\nAre you sure you want to proceed? (y/N)")
     
     if input().lower() == 'y':
         cleanup()
