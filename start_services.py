@@ -21,6 +21,7 @@ import string
 import jwt
 from datetime import datetime, timedelta
 from cloudflare_setup import main as setup_cloudflare
+import random
 
 def generate_random_string(length, exclude_chars='@<>&\'"'):
     """Generate a cryptographically secure random string of specified length."""
@@ -127,38 +128,23 @@ def prepare_supabase_env():
 def generate_searxng_secret_key():
     """Generate a secret key for SearXNG."""
     print("Setting up SearXNG...")
-    
-    settings_path = os.path.join("searxng", "settings.yml")
-    settings_base_path = os.path.join("searxng", "settings-base.yml")
-    
-    if not os.path.exists(settings_base_path):
-        print("Warning: SearXNG base settings file not found.")
-        return
-    
-    if not os.path.exists(settings_path):
-        shutil.copyfile(settings_base_path, settings_path)
-    
-    system = platform.system()
     try:
-        if system == "Windows":
-            ps_command = [
-                "powershell", "-Command",
-                "$randomBytes = New-Object byte[] 32; " +
-                "(New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($randomBytes); " +
-                "$secretKey = -join ($randomBytes | ForEach-Object { \"{0:x2}\" -f $_ }); " +
-                "(Get-Content searxng/settings.yml) -replace 'ultrasecretkey', $secretKey | Set-Content searxng/settings.yml"
-            ]
-            subprocess.run(ps_command, check=True)
+        if not os.path.exists("searxng"):
+            os.makedirs("searxng")
+        
+        settings_path = os.path.join("searxng", "settings.yml")
+        if not os.path.exists(settings_path):
+            secret_key = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+            with open(settings_path, "w") as f:
+                f.write(f"server:\n    secret_key: {secret_key}\n")
+            print("Generated SearXNG secret key.")
+            return secret_key
         else:
-            openssl_cmd = ["openssl", "rand", "-hex", "32"]
-            random_key = subprocess.check_output(openssl_cmd).decode('utf-8').strip()
-            sed_cmd = ["sed", "-i", "" if system == "Darwin" else None, f"s|ultrasecretkey|{random_key}|g", settings_path]
-            if system == "Darwin":
-                subprocess.run(sed_cmd, check=True)
-            else:
-                subprocess.run(sed_cmd[:-1], check=True)
+            print("SearXNG settings already exist.")
+            return None
     except Exception as e:
         print(f"Error generating SearXNG secret key: {e}")
+        return None
 
 def setup_cloudflared():
     """Configure Cloudflare Tunnel if requested."""

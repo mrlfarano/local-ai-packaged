@@ -1,0 +1,30 @@
+[api]
+enabled = true
+address = "0.0.0.0:8686"
+playground = false
+
+[sources.docker_logs]
+type = "docker_logs"
+docker_host = "unix:///var/run/docker.sock"
+
+[transforms.add_fields]
+type = "remap"
+inputs = ["docker_logs"]
+source = '''
+  .container = string!(.container_name)
+  .timestamp = parse_timestamp!(.timestamp, format: "%+")
+  .message = string!(.message)
+'''
+
+[sinks.console]
+type = "console"
+inputs = ["add_fields"]
+encoding.codec = "json"
+
+[sinks.logflare]
+type = "http"
+inputs = ["add_fields"]
+encoding.codec = "json"
+uri = "https://api.logflare.app/logs/docker?api_key=${LOGFLARE_API_KEY}&source_id=${LOGFLARE_SOURCE_ID}"
+compression = "gzip"
+request.headers.content_type = "application/json" 
