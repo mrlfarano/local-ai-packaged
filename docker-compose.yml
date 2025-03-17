@@ -191,7 +191,7 @@ services:
     image: redis:alpine
     container_name: redis
     restart: always
-    command: redis-server --requirepass ${REDIS_PASSWORD:-redis}
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis}"]
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-redis}
     volumes:
