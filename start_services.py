@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from cloudflare_setup import main as setup_cloudflare
 import random
 from typing import List, Dict
+from pathlib import Path
 
 def print_banner():
     banner = r"""
@@ -86,26 +87,148 @@ def generate_secret(length: int = 32) -> str:
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
-def setup_environment() -> None:
-    print("Setting up environment variables...")
-    env_file = ".env"
+def generate_secure_string(length: int = 32) -> str:
+    """Generate a secure random string."""
+    alphabet = string.ascii_letters + string.digits + string.punctuation
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+def generate_jwt_secret() -> str:
+    """Generate a secure JWT secret."""
+    return secrets.token_urlsafe(32)
+
+def generate_api_key() -> str:
+    """Generate a secure API key."""
+    return secrets.token_urlsafe(32)
+
+def create_env_file():
+    """Create a .env file with secure random values."""
+    env_vars = {
+        # Postgres Configuration
+        'POSTGRES_PASSWORD': generate_secure_string(16),
+        'POSTGRES_USER': 'postgres',
+        'POSTGRES_DB': 'postgres',
+        'POSTGRES_HOST': 'db',
+        'POSTGRES_PORT': '5432',
+
+        # Redis Configuration
+        'REDIS_HOST': 'redis',
+        'REDIS_PORT': '6379',
+        'REDIS_PASSWORD': generate_secure_string(16),
+
+        # Supabase Configuration
+        'SUPABASE_DB_HOST': 'db',
+        'SUPABASE_DB_PORT': '5432',
+        'SUPABASE_DB_NAME': 'postgres',
+        'SUPABASE_DB_USER': 'postgres',
+        'SUPABASE_DB_PASSWORD': generate_secure_string(16),
+
+        # Supabase Secrets
+        'JWT_SECRET': generate_jwt_secret(),
+        'ANON_KEY': f"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlLWRlbW8iLCJpYXQiOjE2NDE3NjkyMDAsImV4cCI6MTc5OTUzNTYwMH0.{generate_secure_string(32)}",
+        'SERVICE_ROLE_KEY': f"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UtZGVtbyIsImlhdCI6MTY0MTc2OTIwMCwiZXhwIjoxNzk5NTM1NjAwfQ.{generate_secure_string(32)}",
+        'DASHBOARD_USERNAME': 'supabase',
+        'DASHBOARD_PASSWORD': generate_secure_string(16),
+        'POOLER_TENANT_ID': '1000',
+
+        # Supavisor Configuration
+        'POOLER_PROXY_PORT_TRANSACTION': '6543',
+        'POOLER_DEFAULT_POOL_SIZE': '20',
+        'POOLER_MAX_CLIENT_CONN': '100',
+        'SECRET_KEY_BASE': generate_secure_string(64),
+        'VAULT_ENC_KEY': generate_secure_string(32),
+
+        # API Proxy Configuration
+        'KONG_HTTP_PORT': '8000',
+        'KONG_HTTPS_PORT': '8443',
+
+        # API Configuration
+        'PGRST_DB_SCHEMAS': 'public,storage,graphql_public',
+
+        # Auth Configuration
+        'SITE_URL': 'http://localhost:3000',
+        'ADDITIONAL_REDIRECT_URLS': '',
+        'JWT_EXPIRY': '3600',
+        'DISABLE_SIGNUP': 'false',
+        'API_EXTERNAL_URL': 'http://localhost:8000',
+
+        # Mailer Configuration
+        'MAILER_URLPATHS_CONFIRMATION': '/auth/v1/verify',
+        'MAILER_URLPATHS_INVITE': '/auth/v1/verify',
+        'MAILER_URLPATHS_RECOVERY': '/auth/v1/verify',
+        'MAILER_URLPATHS_EMAIL_CHANGE': '/auth/v1/verify',
+
+        # Email Configuration
+        'ENABLE_EMAIL_SIGNUP': 'true',
+        'ENABLE_EMAIL_AUTOCONFIRM': 'false',
+        'SMTP_ADMIN_EMAIL': 'admin@example.com',
+        'SMTP_HOST': 'supabase-mail',
+        'SMTP_PORT': '2500',
+        'SMTP_USER': generate_secure_string(16),
+        'SMTP_PASS': generate_secure_string(16),
+        'SMTP_SENDER_NAME': 'Local AI System',
+        'ENABLE_ANONYMOUS_USERS': 'false',
+
+        # Phone Configuration
+        'ENABLE_PHONE_SIGNUP': 'true',
+        'ENABLE_PHONE_AUTOCONFIRM': 'true',
+
+        # Studio Configuration
+        'STUDIO_DEFAULT_ORGANIZATION': 'Default Organization',
+        'STUDIO_DEFAULT_PROJECT': 'Default Project',
+        'STUDIO_PORT': '3000',
+        'SUPABASE_PUBLIC_URL': 'http://localhost:8000',
+        'IMGPROXY_ENABLE_WEBP_DETECTION': 'true',
+
+        # Functions Configuration
+        'FUNCTIONS_VERIFY_JWT': 'false',
+
+        # Logs Configuration
+        'LOGFLARE_LOGGER_BACKEND_API_KEY': generate_secure_string(32),
+        'LOGFLARE_API_KEY': generate_secure_string(32),
+        'DOCKER_SOCKET_LOCATION': '/var/run/docker.sock',
+
+        # N8N Configuration
+        'N8N_BASIC_AUTH_USER': 'admin',
+        'N8N_BASIC_AUTH_PASSWORD': generate_secure_string(16),
+        'N8N_ENCRYPTION_KEY': generate_secure_string(32),
+        'N8N_HOST': 'http://localhost:5678',
+        'N8N_PORT': '5678',
+        'N8N_PROTOCOL': 'http',
+        'N8N_SSL_CERT': '',
+        'N8N_SSL_KEY': '',
+        'N8N_USER_MANAGEMENT_JWT_SECRET': generate_secure_string(32),
+
+        # Flowise Configuration
+        'FLOWISE_USERNAME': 'admin',
+        'FLOWISE_PASSWORD': generate_secure_string(16),
+        'FLOWISE_PORT': '3001',
+
+        # SearXNG Configuration
+        'SEARXNG_SECRET': generate_secure_string(32)
+    }
+
+    # Create .env file
+    with open('.env', 'w') as f:
+        for key, value in env_vars.items():
+            f.write(f"{key}={value}\n")
+
+    print_status("Created .env file with secure random values", "OK")
+
+def setup_environment():
+    """Set up the environment variables and clone Supabase repository."""
+    print_status("Setting up environment...", "INFO")
     
-    if not os.path.exists(env_file):
-        with open(env_file, "w") as f:
-            f.write(f"POSTGRES_PASSWORD={generate_secret()}\n")
-            f.write(f"JWT_SECRET={generate_secret()}\n")
-            f.write(f"ANON_KEY={generate_secret()}\n")
-            f.write(f"SERVICE_ROLE_KEY={generate_secret()}\n")
-            f.write(f"DASHBOARD_USERNAME=admin\n")
-            f.write(f"DASHBOARD_PASSWORD={generate_secret()}\n")
-            f.write(f"REDIS_PASSWORD={generate_secret()}\n")
-            f.write(f"N8N_BASIC_AUTH_USER=admin\n")
-            f.write(f"N8N_BASIC_AUTH_PASSWORD=admin123\n")
-            f.write(f"N8N_ENCRYPTION_KEY={generate_secret()}\n")
-            f.write(f"FLOWISE_USERNAME=admin\n")
-            f.write(f"FLOWISE_PASSWORD=admin123\n")
+    # Create .env file if it doesn't exist
+    if not os.path.exists('.env'):
+        create_env_file()
     
-    print("Environment setup complete with secure secrets.")
+    # Clone Supabase repository if it doesn't exist
+    if not os.path.exists('supabase'):
+        print_status("Cloning Supabase repository...", "INFO")
+        subprocess.run(['git', 'clone', 'https://github.com/supabase/supabase.git'], check=True)
+        print_status("Supabase repository cloned successfully", "OK")
+    else:
+        print_status("Supabase repository already exists", "INFO")
 
 def run_command(cmd, cwd=None):
     """Run a shell command and print it."""
