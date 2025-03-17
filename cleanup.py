@@ -37,15 +37,59 @@ def cleanup():
     
     # 3. Remove all Docker volumes
     print("\n3. Removing Docker volumes...")
-    run_command("docker volume ls -q | xargs -r docker volume rm -f")
+    # List all volumes used by our services
+    volumes_to_remove = [
+        "n8n_storage",
+        "ollama_storage",
+        "qdrant_storage",
+        "open-webui",
+        "flowise",
+        "caddy-data",
+        "caddy-config",
+        "valkey-data",
+        "cloudflared-config",
+        "ollama-data",
+        "redis-data",
+        "n8n-data",
+        "flowise-data",
+        "searxng-data"
+    ]
+    
+    # Remove specific volumes
+    for volume in volumes_to_remove:
+        run_command(f"docker volume rm -f {volume}")
+    
+    # Remove all unused volumes
     run_command("docker volume prune -f")
     
-    # 4. Remove all Docker networks
-    print("\n4. Removing Docker networks...")
+    # 4. Remove all Docker images
+    print("\n4. Removing Docker images...")
+    # List all images used by our services
+    images_to_remove = [
+        "n8nio/n8n:latest",
+        "ghcr.io/open-webui/open-webui:main",
+        "flowiseai/flowise:latest",
+        "qdrant/qdrant",
+        "redis:alpine",
+        "searxng/searxng:latest",
+        "ollama/ollama:latest",
+        "cloudflare/cloudflared:latest",
+        "docker.io/library/caddy:2-alpine"
+    ]
+    
+    # Remove specific images
+    for image in images_to_remove:
+        run_command(f"docker rmi -f {image}")
+    
+    # Remove all unused images
+    run_command("docker image prune -af")
+    
+    # 5. Remove all Docker networks
+    print("\n5. Removing Docker networks...")
     run_command("docker network prune -f")
     
-    # 5. Remove specific directories
-    print("\n5. Removing project directories...")
+    # 6. Remove specific directories
+    print("\n6. Removing project directories...")
     dirs_to_remove = [
         "supabase",
         "n8n-data",
@@ -70,8 +114,8 @@ def cleanup():
                 # Try with force remove if normal remove fails
                 run_command(f"rm -rf {dir_path}")
     
-    # 6. Remove specific files
-    print("\n6. Removing configuration files...")
+    # 7. Remove specific files
+    print("\n7. Removing configuration files...")
     files_to_remove = [
         ".env",
         "cloudflared.exe",
@@ -89,9 +133,9 @@ def cleanup():
                 # Try with force remove if normal remove fails
                 run_command(f"rm -f {file_path}")
     
-    # 7. Final cleanup
-    print("\n7. Final cleanup...")
-    run_command("docker system prune -f")
+    # 8. Final cleanup
+    print("\n8. Final cleanup...")
+    run_command("docker system prune -af --volumes")
     
     print("\n🧹 Cleanup complete! You can now start fresh with:")
     print("1. git pull  # to get the latest files")
@@ -103,6 +147,7 @@ if __name__ == "__main__":
     print("This includes:")
     print("- All running containers")
     print("- All Docker volumes and networks")
+    print("- All Docker images")
     print("- All local configuration files")
     print("- All service data directories")
     print("\nAre you sure you want to proceed? (y/N)")
