@@ -6,8 +6,8 @@ services:
     image: timberio/vector:latest-debian
     restart: unless-stopped
     volumes:
-      - ./volumes/logs/vector.yml:/etc/vector/vector.yml:ro,z
-      - ${DOCKER_SOCKET_LOCATION}:/var/run/docker.sock:ro,z
+      - ./vector.toml:/etc/vector/vector.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       test:
         [
@@ -16,7 +16,7 @@ services:
           "--no-verbose",
           "--tries=1",
           "--spider",
-          "http://localhost:9001/health",
+          "http://localhost:8686/health",
         ]
       interval: 30s
       timeout: 10s
@@ -27,6 +27,8 @@ services:
       VECTOR_WATCH_CONFIG: "true"
       MALLOC_CONF: "background_thread:true,metadata_thp:auto,dirty_decay_ms:30000,muzzy_decay_ms:30000"
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      LOGFLARE_API_KEY: ${LOGFLARE_API_KEY}
+      LOGFLARE_SOURCE_ID: ${LOGFLARE_SOURCE_ID}
     command: ["--config", "/etc/vector/vector.yml", "--watch-config"]
     security_opt:
       - "label=disable"

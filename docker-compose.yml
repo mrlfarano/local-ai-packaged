@@ -10,6 +10,9 @@ volumes:
   cloudflared-config:
   ollama-data:
   redis-data:
+  n8n-data:
+  qdrant-data:
+  flowise-data:
 
 x-n8n: &service-n8n
   image: n8nio/n8n:latest
@@ -267,11 +270,3 @@ networks:
   localai_default:
     name: localai_default
     driver: bridge
-
-volumes:
-  n8n-data:
-  ollama-data:
-  qdrant-data:
-  redis-data:
-  flowise-data:
-  open-webui:
