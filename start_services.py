@@ -22,6 +22,41 @@ import jwt
 from datetime import datetime, timedelta
 from cloudflare_setup import main as setup_cloudflare
 import random
+from typing import List, Dict
+
+def print_banner():
+    banner = r"""
+    ██╗      ██████╗  ██████╗ █████╗ ██╗         █████╗ ██╗
+    ██║     ██╔═══██╗██╔════╝██╔══██╗██║        ██╔══██╗██║
+    ██║     ██║   ██║██║     ███████║██║        ███████║██║
+    ██║     ██║   ██║██║     ██╔══██║██║        ██╔══██║██║
+    ███████╗╚██████╔╝╚██████╗██║  ██║███████╗   ██║  ██║██║
+    ╚══════╝ ╚═════╝  ╚═════╝╚═╝  ╚═╝╚══════╝   ╚═╝  ╚═╝╚═╝
+    ============================================================
+    [  SYSTEM INITIALIZATION SEQUENCE - v2.0.24.ALPHA  ]
+    ============================================================
+    """
+    print("\033[32m" + banner + "\033[0m")
+
+def print_status(message, status="OK"):
+    status_colors = {
+        "OK": "\033[32m",     # Green
+        "ERROR": "\033[31m",  # Red
+        "WARN": "\033[33m",   # Yellow
+        "INFO": "\033[36m"    # Cyan
+    }
+    color = status_colors.get(status, "\033[37m")  # Default to white
+    print(f"{color}[{status}]\033[0m {message}")
+
+def print_section(title):
+    print(f"\n\033[35m{'=' * 60}\033[0m")
+    print(f"\033[35m[  {title}  ]\033[0m")
+    print(f"\033[35m{'=' * 60}\033[0m\n")
+
+def print_matrix_line():
+    chars = "░▒▓█"
+    line = "".join(random.choice(chars) for _ in range(60))
+    print(f"\033[32m{line}\033[0m")
 
 def generate_random_string(length, exclude_chars='@<>&\'"'):
     """Generate a cryptographically secure random string of specified length."""
@@ -47,50 +82,28 @@ def generate_jwt_token(secret_key, role):
     }
     return jwt.encode(payload, secret_key, algorithm="HS256")
 
-def setup_environment():
-    """Set up the environment with secure secrets."""
-    print("Setting up environment variables...")
-    
-    if not os.path.exists(".env.example"):
-        print("Error: .env.example file not found!")
-        sys.exit(1)
+def generate_secret(length: int = 32) -> str:
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
-    with open(".env.example", "r") as f:
-        template = f.read()
+def setup_environment() -> None:
+    print("Setting up environment variables...")
+    env_file = ".env"
     
-    # Generate secrets
-    secrets_dict = {
-        "N8N_ENCRYPTION_KEY": generate_random_string(32),
-        "N8N_USER_MANAGEMENT_JWT_SECRET": generate_random_string(32),
-        "POSTGRES_PASSWORD": generate_random_string(48),
-        "JWT_SECRET": generate_random_string(64),
-        "DASHBOARD_USERNAME": "admin",
-        "DASHBOARD_PASSWORD": generate_random_string(32),
-        "POOLER_TENANT_ID": str(secrets.randbelow(9000) + 1000),
-        "SECRET_KEY_BASE": generate_random_string(64),
-        "VAULT_ENC_KEY": generate_random_string(32),
-        "LOGFLARE_LOGGER_BACKEND_API_KEY": generate_random_string(48),
-        "LOGFLARE_API_KEY": generate_random_string(48)
-    }
-    
-    # Generate Supabase tokens
-    jwt_secret = secrets_dict["JWT_SECRET"]
-    secrets_dict["ANON_KEY"] = generate_jwt_token(jwt_secret, "anon")
-    secrets_dict["SERVICE_ROLE_KEY"] = generate_jwt_token(jwt_secret, "service_role")
-    
-    # Replace values in template
-    output_content = template
-    for key, value in secrets_dict.items():
-        key_loc = output_content.find(f"{key}=")
-        if key_loc != -1:
-            line_end = output_content.find("\n", key_loc)
-            if line_end == -1:
-                line_end = len(output_content)
-            line_start = key_loc + len(key) + 1
-            output_content = output_content[:line_start] + value + output_content[line_end:]
-    
-    with open(".env", "w") as f:
-        f.write(output_content)
+    if not os.path.exists(env_file):
+        with open(env_file, "w") as f:
+            f.write(f"POSTGRES_PASSWORD={generate_secret()}\n")
+            f.write(f"JWT_SECRET={generate_secret()}\n")
+            f.write(f"ANON_KEY={generate_secret()}\n")
+            f.write(f"SERVICE_ROLE_KEY={generate_secret()}\n")
+            f.write(f"DASHBOARD_USERNAME=admin\n")
+            f.write(f"DASHBOARD_PASSWORD={generate_secret()}\n")
+            f.write(f"REDIS_PASSWORD={generate_secret()}\n")
+            f.write(f"N8N_BASIC_AUTH_USER=admin\n")
+            f.write(f"N8N_BASIC_AUTH_PASSWORD=admin123\n")
+            f.write(f"N8N_ENCRYPTION_KEY={generate_secret()}\n")
+            f.write(f"FLOWISE_USERNAME=admin\n")
+            f.write(f"FLOWISE_PASSWORD=admin123\n")
     
     print("Environment setup complete with secure secrets.")
 
@@ -99,24 +112,22 @@ def run_command(cmd, cwd=None):
     print("Running:", " ".join(cmd))
     subprocess.run(cmd, cwd=cwd, check=True)
 
-def clone_supabase_repo():
-    """Clone the Supabase repository using sparse checkout."""
+def clone_supabase():
+    print("Cloning the Supabase repository...")
     if not os.path.exists("supabase"):
-        print("Cloning the Supabase repository...")
-        run_command([
-            "git", "clone", "--filter=blob:none", "--no-checkout",
-            "https://github.com/supabase/supabase.git"
-        ])
-        os.chdir("supabase")
-        run_command(["git", "sparse-checkout", "init", "--cone"])
-        run_command(["git", "sparse-checkout", "set", "docker"])
-        run_command(["git", "checkout", "master"])
-        os.chdir("..")
-    else:
-        print("Supabase repository already exists, updating...")
-        os.chdir("supabase")
-        run_command(["git", "pull"])
-        os.chdir("..")
+        commands = [
+            "git clone --filter=blob:none --no-checkout https://github.com/supabase/supabase.git",
+            "cd supabase && git sparse-checkout init --cone",
+            "cd supabase && git sparse-checkout set docker",
+            "cd supabase && git checkout master"
+        ]
+        for cmd in commands:
+            print(f"Running: {cmd}")
+            subprocess.run(cmd, shell=True, check=True)
+        
+        # Copy .env file to supabase/docker/.env
+        print("Copying .env to supabase/docker/.env...")
+        shutil.copy2(".env", "supabase/docker/.env")
 
 def prepare_supabase_env():
     """Copy .env to Supabase docker directory."""
@@ -125,78 +136,54 @@ def prepare_supabase_env():
     print("Copying .env to supabase/docker/.env...")
     shutil.copyfile(env_example_path, env_path)
 
-def generate_searxng_secret_key():
-    """Generate a secret key for SearXNG."""
+def setup_searxng():
     print("Setting up SearXNG...")
-    try:
-        if not os.path.exists("searxng"):
-            os.makedirs("searxng")
-        
-        settings_path = os.path.join("searxng", "settings.yml")
-        if not os.path.exists(settings_path):
-            secret_key = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
-            with open(settings_path, "w") as f:
-                f.write(f"server:\n    secret_key: {secret_key}\n")
-            print("Generated SearXNG secret key.")
-            return secret_key
-        else:
-            print("SearXNG settings already exist.")
-            return None
-    except Exception as e:
-        print(f"Error generating SearXNG secret key: {e}")
-        return None
+    searxng_dir = "searxng-data"
+    if not os.path.exists(searxng_dir):
+        os.makedirs(searxng_dir)
+        settings_file = os.path.join(searxng_dir, "settings.yml")
+        if not os.path.exists(settings_file):
+            with open(settings_file, "w") as f:
+                f.write(f"server:\n  secret_key: {generate_secret()}\n")
+            print("SearXNG settings created.")
+    else:
+        print("SearXNG settings already exist.")
 
-def setup_cloudflared():
-    """Configure Cloudflare Tunnel if requested."""
+def setup_cloudflared() -> bool:
     print("\nWould you like to use Cloudflare Tunnels for secure access? (y/N)")
     print("This will allow secure access to your services without managing DNS records.")
-    response = input().strip().lower()
-    if response == 'y' or response == 'yes':
-        print("\nPlease provide the following Cloudflare information:")
-        print("\n1. Cloudflare Tunnel token (from Zero Trust dashboard):")
-        tunnel_token = input().strip()
-        
-        print("\n2. Cloudflare API token (with Tunnel:Edit and DNS:Edit permissions):")
-        api_token = input().strip()
-        
-        print("\n3. Cloudflare Account ID (found in the dashboard URL):")
-        account_id = input().strip()
-        
-        print("\n4. Your domain name (e.g., example.com):")
-        domain = input().strip()
-        
-        if all([tunnel_token, api_token, account_id, domain]):
-            with open(".env", "r") as f:
-                content = f.read()
-            
-            # Update all Cloudflare-related variables
-            replacements = {
-                "CLOUDFLARED_TUNNEL_TOKEN=": f"CLOUDFLARED_TUNNEL_TOKEN={tunnel_token}",
-                "CLOUDFLARE_API_TOKEN=": f"CLOUDFLARE_API_TOKEN={api_token}",
-                "CLOUDFLARE_ACCOUNT_ID=": f"CLOUDFLARE_ACCOUNT_ID={account_id}",
-                "CLOUDFLARE_DOMAIN=": f"CLOUDFLARE_DOMAIN={domain}"
-            }
-            
-            for key, value in replacements.items():
-                if key in content:
-                    content = content.replace(key + content.split(key)[1].split("\n")[0], value)
-                else:
-                    content += f"\n{value}"
-            
-            with open(".env", "w") as f:
-                f.write(content)
-            
-            print("\nCloudflare configuration completed successfully.")
-            print("The following hostnames will be configured:")
-            print(f"- n8n.{domain}")
-            print(f"- webui.{domain}")
-            print(f"- flowise.{domain}")
-            print(f"- ollama.{domain}")
-            print(f"- searxng.{domain}")
-            return True
-        else:
-            print("\nError: All Cloudflare information is required. Skipping Cloudflare setup.")
-    return False
+    choice = input().lower()
+    
+    if choice != 'y':
+        return False
+    
+    print("\nPlease provide the following Cloudflare information:\n")
+    
+    # Get Cloudflare information
+    tunnel_token = input("1. Cloudflare Tunnel token (from Zero Trust dashboard):\n")
+    api_token = input("\n2. Cloudflare API token (with Tunnel:Edit and DNS:Edit permissions):\n")
+    account_id = input("\n3. Cloudflare Account ID (found in the dashboard URL):\n")
+    domain = input("\n4. Your domain name (e.g., example.com):\n")
+    
+    # Update .env file with Cloudflare information
+    with open(".env", "a") as f:
+        f.write(f"\nCLOUDFLARED_TUNNEL_TOKEN={tunnel_token}\n")
+        f.write(f"CLOUDFLARE_API_TOKEN={api_token}\n")
+        f.write(f"CLOUDFLARE_ACCOUNT_ID={account_id}\n")
+        f.write(f"DOMAIN={domain}\n")
+    
+    # Copy updated .env to supabase/docker/.env
+    shutil.copy2(".env", "supabase/docker/.env")
+    
+    print("\nCloudflare configuration completed successfully.")
+    print("The following hostnames will be configured:")
+    print(f"- n8n.{domain}")
+    print(f"- webui.{domain}")
+    print(f"- flowise.{domain}")
+    print(f"- ollama.{domain}")
+    print(f"- searxng.{domain}")
+    
+    return True
 
 def stop_existing_containers():
     """Stop and remove existing containers."""
@@ -212,60 +199,105 @@ def stop_existing_containers():
     except subprocess.CalledProcessError:
         print("No existing containers to stop.")
 
-def start_services(profile=None, use_cloudflared=False):
-    """Start all services with the specified profile."""
-    print("Starting services...")
+def select_services() -> Dict[str, bool]:
+    services = {
+        "Supabase (Database & Vector Store)": True,
+        "N8N (Workflow Automation)": True,
+        "Open WebUI (Chat Interface)": True,
+        "Flowise (Visual Programming)": True,
+        "Qdrant (Vector Database)": True,
+        "Redis (Cache)": True,
+        "SearXNG (Search Engine)": True,
+        "Ollama (Local LLM)": True,
+        "Cloudflared (Secure Access)": False
+    }
     
-    # Start Supabase services first
-    try:
-        print("Starting Supabase database...")
-        run_command([
-            "docker", "compose", "-p", "localai",
-            "-f", "supabase/docker/docker-compose.yml",
-            "up", "-d", "db"  # Start only db first
-        ])
-        
-        print("Waiting for database to initialize...")
-        time.sleep(15)  # Give the database time to initialize
-        
-        print("Starting remaining Supabase services...")
-        run_command([
-            "docker", "compose", "-p", "localai",
-            "-f", "supabase/docker/docker-compose.yml",
-            "up", "-d"  # Now start all remaining services
-        ])
-        
-        print("Waiting for Supabase services to stabilize...")
-        time.sleep(10)
-    except subprocess.CalledProcessError as e:
-        print(f"Warning: Error starting Supabase services: {e}")
-        print("Continuing with other services...")
+    print_section("SERVICE INITIALIZATION MATRIX")
+    print("\033[36mSelect services to activate in the neural matrix:\033[0m")
+    print("\033[37m[ENTER] to accept default state | [y/n] to toggle\033[0m\n")
     
-    # Start local AI services
-    try:
-        print("Starting local AI services...")
-        cmd = ["docker", "compose", "-p", "localai"]
-        if profile and profile != "none":
-            cmd.extend(["--profile", profile])
-        if use_cloudflared:
-            cmd.extend(["--profile", "cloudflared"])
-        cmd.extend(["-f", "docker-compose.yml", "up", "-d"])
-        run_command(cmd)
+    for service, default in services.items():
+        default_str = "\033[32m[ACTIVE]\033[0m" if default else "\033[31m[INACTIVE]\033[0m"
+        choice = input(f"\033[33m▶\033[0m {service} {default_str}: ").lower()
+        print_matrix_line()
         
-        print("Waiting for services to initialize...")
-        time.sleep(10)
-        
-        # Check service health
-        run_command(["docker", "ps", "--format", "{{.Names}}\t{{.Status}}"])
-        
-    except subprocess.CalledProcessError as e:
-        print(f"Error starting local AI services: {e}")
-        sys.exit(1)
+        if choice == '':
+            continue
+        elif choice in ['y', 'yes']:
+            services[service] = True
+        elif choice in ['n', 'no']:
+            services[service] = False
+    
+    return services
 
-    # After starting services, set up Cloudflare tunnel hostnames
-    if use_cloudflared:
-        print("\nSetting up Cloudflare tunnel hostnames...")
-        setup_cloudflare()
+def start_services(selected_services: Dict[str, bool], use_cloudflare: bool = False) -> None:
+    print_section("NEURAL NETWORK INITIALIZATION")
+    print_status("Terminating existing neural pathways...", "INFO")
+    subprocess.run(
+        "docker compose -p localai -f docker-compose.yml -f supabase/docker/docker-compose.yml down",
+        shell=True
+    )
+
+    if selected_services["Supabase (Database & Vector Store)"]:
+        print_status("Activating quantum database matrix...", "INFO")
+        try:
+            subprocess.run(
+                "docker compose -p localai -f supabase/docker/docker-compose.yml up -d db",
+                shell=True,
+                check=True
+            )
+            print_status("Neural pathways stabilizing...", "INFO")
+            time.sleep(5)
+        except subprocess.CalledProcessError as e:
+            print_status(f"Database initialization fault: {e}", "ERROR")
+            print_status("Continuing with backup protocols...", "WARN")
+
+    print_status("Launching AI core systems...", "INFO")
+    cmd = ["docker", "compose", "-p", "localai"]
+    
+    if selected_services["Ollama (Local LLM)"]:
+        cmd.extend(["--profile", "cpu"])
+        print_status("CPU neural network engaged", "INFO")
+    
+    if use_cloudflare and selected_services["Cloudflared (Secure Access)"]:
+        cmd.extend(["--profile", "cloudflared"])
+        print_status("Quantum tunneling protocols activated", "INFO")
+    
+    cmd.extend(["-f", "docker-compose.yml", "up", "-d"])
+    
+    selected = []
+    service_map = {
+        "N8N (Workflow Automation)": "n8n",
+        "Open WebUI (Chat Interface)": "open-webui",
+        "Flowise (Visual Programming)": "flowise",
+        "Qdrant (Vector Database)": "qdrant",
+        "Redis (Cache)": "redis",
+        "SearXNG (Search Engine)": "searxng"
+    }
+    
+    for service_name, container_name in service_map.items():
+        if selected_services[service_name]:
+            selected.append(container_name)
+            print_status(f"Activating {service_name}", "INFO")
+    
+    if selected:
+        cmd.extend(selected)
+    
+    try:
+        subprocess.run(cmd, check=True)
+        print_section("SYSTEM ONLINE")
+        print("\033[32mNeural matrix successfully initialized!\033[0m")
+        print("\n\033[36mAccess points activated:\033[0m")
+        print("\033[37m╔════════════════════════════════════════╗")
+        print("║  N8N        ➜  http://localhost:5678   ║")
+        print("║  Open WebUI ➜  http://localhost:3000   ║")
+        print("║  Flowise   ➜  http://localhost:3001   ║")
+        print("║  Qdrant    ➜  http://localhost:6333   ║")
+        print("║  SearXNG   ➜  http://localhost:8080   ║")
+        print("║  Ollama    ➜  http://localhost:11434  ║")
+        print("╚════════════════════════════════════════╝\033[0m")
+    except subprocess.CalledProcessError as e:
+        print_status(f"Critical system failure: {e}", "ERROR")
 
 def check_dependencies():
     """Check if required dependencies are installed."""
@@ -276,57 +308,34 @@ def check_dependencies():
         subprocess.run([sys.executable, "-m", "pip", "install", "PyJWT", "cryptography"], check=True)
 
 def main():
-    parser = argparse.ArgumentParser(description='Set up and start the local AI and Supabase services.')
+    print_banner()
+    parser = argparse.ArgumentParser(description='Initialize the local AI neural matrix.')
     parser.add_argument('--profile', choices=['cpu', 'gpu-nvidia', 'gpu-amd', 'none'], default='cpu',
-                      help='Profile to use for Docker Compose (default: cpu)')
+                      help='Neural processing unit selection (default: cpu)')
     args = parser.parse_args()
 
-    # Check dependencies
+    print_section("SYSTEM DIAGNOSTICS")
     check_dependencies()
     
-    # Setup environment and generate secrets
     if not os.path.exists(".env"):
+        print_status("Generating quantum encryption keys...", "INFO")
         setup_environment()
     
-    # Clone and prepare Supabase
-    clone_supabase_repo()
+    print_status("Establishing neural links...", "INFO")
+    clone_supabase()
     prepare_supabase_env()
     
-    # Generate SearXNG secret key
-    generate_searxng_secret_key()
+    print_status("Configuring search matrix...", "INFO")
+    setup_searxng()
     
-    # Setup Cloudflared if requested
     use_cloudflared = setup_cloudflared()
     
-    # Stop any existing containers
-    stop_existing_containers()
-    
-    # Start all services
-    start_services(args.profile, use_cloudflared)
-    
-    print("\n🎉 Setup complete! Your services are now starting.")
-    
-    if use_cloudflared:
-        # Get domain from .env file
-        with open(".env", "r") as f:
-            content = f.read()
-            domain = next((line.split("=")[1].strip() for line in content.split("\n") 
-                         if line.startswith("CLOUDFLARE_DOMAIN=")), None)
-        if domain:
-            print("\nYour services will be available at:")
-            print(f"- n8n: https://n8n.{domain}")
-            print(f"- Open WebUI: https://webui.{domain}")
-            print(f"- Flowise: https://flowise.{domain}")
-            print(f"- Ollama: https://ollama.{domain}")
-            print(f"- SearXNG: https://searxng.{domain}")
-            print("\nNote: It may take a few minutes for the Cloudflare Tunnel to become active.")
-            print("You can monitor the tunnel status in the Cloudflare Zero Trust dashboard.")
-    else:
-        print("\nAccess your services at:")
-        print("- n8n: http://localhost:5678")
-        print("- Open WebUI: http://localhost:3000")
-        print("- Flowise: http://localhost:3001")
-        print("- SearXNG: http://localhost:8080")
+    selected_services = select_services()
+    start_services(selected_services, use_cloudflared)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\033[31m[ABORT] Neural matrix shutdown initiated...\033[0m")
+        sys.exit(1)
