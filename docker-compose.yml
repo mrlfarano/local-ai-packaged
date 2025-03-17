@@ -1,5 +1,3 @@
-version: "3.8"
-
 volumes:
   n8n_storage:
   ollama_storage:
@@ -252,6 +250,8 @@ services:
 networks:
   localai_default:
     name: localai_default
+    driver: bridge
+    external: false
   supabase_network:
     name: localai_default
     external: true
