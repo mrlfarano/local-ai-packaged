@@ -27,4 +27,7 @@ inputs = ["add_fields"]
 encoding.codec = "json"
 uri = "https://api.logflare.app/logs/docker?api_key=${LOGFLARE_API_KEY}&source_id=${LOGFLARE_SOURCE_ID}"
 compression = "gzip"
-request.headers.content_type = "application/json" 
+request.headers.content_type = "application/json"
+
+[healthchecks]
+enabled = true 

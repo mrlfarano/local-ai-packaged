@@ -103,6 +103,9 @@ def generate_api_key() -> str:
 def create_env_file():
     """Create a .env file with secure random values."""
     env_vars = {
+        # System Configuration
+        'tmp': '/tmp',
+
         # Postgres Configuration
         'POSTGRES_PASSWORD': generate_secure_string(16),
         'POSTGRES_USER': 'postgres',
@@ -207,12 +210,19 @@ def create_env_file():
         'SEARXNG_SECRET': generate_secure_string(32)
     }
 
-    # Create .env file
+    # Create .env file in root directory
     with open('.env', 'w') as f:
         for key, value in env_vars.items():
             f.write(f"{key}={value}\n")
 
+    # Create supabase/docker directory if it doesn't exist
+    os.makedirs('supabase/docker', exist_ok=True)
+
+    # Copy .env file to supabase/docker/.env
+    shutil.copy2('.env', 'supabase/docker/.env')
+
     print_status("Created .env file with secure random values", "OK")
+    print_status("Copied .env file to supabase/docker/.env", "OK")
 
 def setup_environment():
     """Set up the environment variables and clone Supabase repository."""
@@ -221,6 +231,11 @@ def setup_environment():
     # Create .env file if it doesn't exist
     if not os.path.exists('.env'):
         create_env_file()
+    else:
+        # If .env exists, ensure it's copied to supabase/docker/.env
+        os.makedirs('supabase/docker', exist_ok=True)
+        shutil.copy2('.env', 'supabase/docker/.env')
+        print_status("Updated supabase/docker/.env with current values", "OK")
     
     # Clone Supabase repository if it doesn't exist
     if not os.path.exists('supabase'):
@@ -354,73 +369,85 @@ def select_services() -> Dict[str, bool]:
     return services
 
 def start_services(selected_services: Dict[str, bool], use_cloudflare: bool = False) -> None:
-    print_section("NEURAL NETWORK INITIALIZATION")
-    print_status("Terminating existing neural pathways...", "INFO")
-    subprocess.run(
-        "docker compose -p localai -f docker-compose.yml -f supabase/docker/docker-compose.yml down",
-        shell=True
-    )
-
-    if selected_services["Supabase (Database & Vector Store)"]:
-        print_status("Activating quantum database matrix...", "INFO")
-        try:
-            subprocess.run(
-                "docker compose -p localai -f supabase/docker/docker-compose.yml up -d db",
-                shell=True,
-                check=True
-            )
-            print_status("Neural pathways stabilizing...", "INFO")
-            time.sleep(5)
-        except subprocess.CalledProcessError as e:
-            print_status(f"Database initialization fault: {e}", "ERROR")
-            print_status("Continuing with backup protocols...", "WARN")
-
-    print_status("Launching AI core systems...", "INFO")
-    cmd = ["docker", "compose", "-p", "localai"]
-    
-    if selected_services["Ollama (Local LLM)"]:
-        cmd.extend(["--profile", "cpu"])
-        print_status("CPU neural network engaged", "INFO")
-    
-    if use_cloudflare and selected_services["Cloudflared (Secure Access)"]:
-        cmd.extend(["--profile", "cloudflared"])
-        print_status("Quantum tunneling protocols activated", "INFO")
-    
-    cmd.extend(["-f", "docker-compose.yml", "up", "-d"])
-    
-    selected = []
-    service_map = {
-        "N8N (Workflow Automation)": "n8n",
-        "Open WebUI (Chat Interface)": "open-webui",
-        "Flowise (Visual Programming)": "flowise",
-        "Qdrant (Vector Database)": "qdrant",
-        "Redis (Cache)": "redis",
-        "SearXNG (Search Engine)": "searxng"
-    }
-    
-    for service_name, container_name in service_map.items():
-        if selected_services[service_name]:
-            selected.append(container_name)
-            print_status(f"Activating {service_name}", "INFO")
-    
-    if selected:
-        cmd.extend(selected)
-    
+    """Start the selected services with proper environment variables."""
     try:
-        subprocess.run(cmd, check=True)
-        print_section("SYSTEM ONLINE")
-        print("\033[32mNeural matrix successfully initialized!\033[0m")
-        print("\n\033[36mAccess points activated:\033[0m")
-        print("\033[37m╔════════════════════════════════════════╗")
-        print("║  N8N        ➜  http://localhost:5678   ║")
-        print("║  Open WebUI ➜  http://localhost:3000   ║")
-        print("║  Flowise   ➜  http://localhost:3001   ║")
-        print("║  Qdrant    ➜  http://localhost:6333   ║")
-        print("║  SearXNG   ➜  http://localhost:8080   ║")
-        print("║  Ollama    ➜  http://localhost:11434  ║")
-        print("╚════════════════════════════════════════╝\033[0m")
-    except subprocess.CalledProcessError as e:
-        print_status(f"Critical system failure: {e}", "ERROR")
+        # Ensure .env file exists and copy it to supabase/docker/.env
+        if os.path.exists('.env'):
+            shutil.copy2('.env', 'supabase/docker/.env')
+        else:
+            print("[ERROR] .env file not found. Please run the script again to generate it.")
+            return False
+
+        # Stop existing containers first
+        try:
+            subprocess.run(['docker', 'compose', '-p', 'localai', 'down'], check=True)
+        except subprocess.CalledProcessError:
+            pass  # Ignore errors if no containers are running
+
+        # Start Supabase services first if selected
+        if 'supabase' in selected_services:
+            print("[INFO] Activating quantum database matrix...")
+            try:
+                # Set environment variables explicitly
+                env = os.environ.copy()
+                env.update({
+                    'POSTGRES_PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
+                    'LOGFLARE_API_KEY': os.getenv('LOGFLARE_API_KEY', ''),
+                    'LOGFLARE_SOURCE_ID': os.getenv('LOGFLARE_SOURCE_ID', ''),
+                    'tmp': '/tmp'  # Add the missing tmp variable
+                })
+                
+                # Start Supabase services
+                result = subprocess.run(
+                    ['docker', 'compose', '-p', 'localai', '-f', 'supabase/docker/docker-compose.yml', 'up', '-d', 'db'],
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                print(result.stdout)
+            except subprocess.CalledProcessError as e:
+                print(f"[ERROR] Database initialization fault: {e.stderr}")
+                print("[WARN] Continuing with backup protocols...")
+
+        # Start other services
+        print("[INFO] Launching AI core systems...")
+        services_to_start = []
+        for service in selected_services:
+            if service != 'supabase':
+                print(f"[INFO] Activating {service.title()}...")
+                services_to_start.append(service)
+
+        if services_to_start:
+            try:
+                # Set environment variables explicitly
+                env = os.environ.copy()
+                env.update({
+                    'POSTGRES_PASSWORD': os.getenv('POSTGRES_PASSWORD', 'postgres'),
+                    'REDIS_PASSWORD': os.getenv('REDIS_PASSWORD', 'redis'),
+                    'tmp': '/tmp'  # Add the missing tmp variable
+                })
+                
+                # Build the docker compose command
+                cmd = ['docker', 'compose', '-p', 'localai', '-f', 'docker-compose.yml', 'up', '-d']
+                cmd.extend(services_to_start)
+                
+                result = subprocess.run(
+                    cmd,
+                    env=env,
+                    check=True,
+                    capture_output=True,
+                    text=True
+                )
+                print(result.stdout)
+            except subprocess.CalledProcessError as e:
+                print(f"[ERROR] Critical system failure: {e.stderr}")
+                return False
+
+        return True
+    except Exception as e:
+        print(f"[ERROR] System initialization failed: {str(e)}")
+        return False
 
 def check_dependencies():
     """Check if required dependencies are installed."""

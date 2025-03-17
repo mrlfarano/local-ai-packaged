@@ -92,7 +92,7 @@ services:
       retries: 3
     depends_on:
       ollama:
-        condition: service_healthy
+        condition: service_started
 
   n8n-import:
     image: n8nio/n8n:latest
