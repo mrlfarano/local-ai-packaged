@@ -105,12 +105,17 @@ services:
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-your-secret-key-here}
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=supabase-db
-      - DB_POSTGRESDB_PORT=${POSTGRES_PORT:-5432}
-      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-postgres}
-      - DB_POSTGRESDB_USER=${POSTGRES_USER:-postgres}
-      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-your-postgres-password}
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=postgres
+      - DB_POSTGRESDB_USER=postgres
+      - DB_POSTGRESDB_PASSWORD=postgres
+      - N8N_RELEASE_DATE=2024-03-19T00:00:00Z
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
     volumes:
       - ./n8n-data:/home/node/.n8n
+    networks:
+      - localai_default
+      - supabase_network
     depends_on:
       - redis
 
@@ -208,3 +213,10 @@ services:
       - "sleep 3; OLLAMA_HOST=ollama:11434 ollama pull qwen2.5:7b-instruct-q4_K_M; OLLAMA_HOST=ollama:11434 ollama pull nomic-embed-text"
     depends_on:
       - ollama-cpu
+
+networks:
+  localai_default:
+    name: localai_default
+  supabase_network:
+    name: localai_default
+    external: true
